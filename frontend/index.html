@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>APAC Legal Updates</title>
+    <link rel="icon" href="data:," />
+    <script>
+      const savedTheme = localStorage.getItem('apacLegalUpdatesTheme');
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.dataset.theme = savedTheme || (prefersDark ? 'dark' : 'light');
+    </script>
+    <link rel="stylesheet" href="./styles.css?v=pd-digest-ai-summary-20260528" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="brand-block">
+          <p class="eyebrow" id="pageEyebrow">Daily legal radar for six jurisdictions</p>
+          <h1 id="pageTitle">APAC Legal Updates</h1>
+          <p class="lede" id="pageDescription">Court, case, judiciary and legislation signals across Malaysia, Singapore, Hong Kong, Australia, New Zealand and India.</p>
+          <nav class="page-nav" aria-label="Content pages">
+            <a href="#legal-updates" class="page-nav-link active" data-page-link="legal-updates">Legal Updates</a>
+            <a href="#legal-ai-news" class="page-nav-link" data-page-link="legal-ai-news">Legal AI News</a>
+            <a href="#apac-risk-heatmap" class="page-nav-link" data-page-link="apac-risk-heatmap">APAC Legal Risk Heatmap</a>
+            <a href="#judge-congratulation-tool" class="page-nav-link" data-page-link="judge-congratulation-tool">Email Drafting Tool</a>
+            <a href="#routing-engine" class="page-nav-link" data-page-link="routing-engine">Legal News Routing Engine</a>
+          </nav>
+        </div>
+        <div class="actions">
+          <button class="mode-toggle" id="themeToggle" type="button" aria-label="Switch colour theme" aria-pressed="false">
+            <span class="mode-toggle-track" aria-hidden="true">
+              <span class="mode-toggle-thumb"></span>
+            </span>
+            <span id="themeToggleText">Dark</span>
+          </button>
+          <button class="ghost-button" id="reload" type="button">Reload</button>
+          <button class="primary-button" id="scan" type="button">Scan now</button>
+        </div>
+      </header>
+
+      <section id="alert" class="alert hidden"></section>
+
+      <section class="stats-grid" id="legalStats">
+        <section class="stat-card">
+          <div class="stat-label">Updates Indexed</div>
+          <div class="stat-value" id="totalCount">0</div>
+          <div class="stat-detail" id="newCount">0 new in 24h</div>
+        </section>
+        <section class="stat-card">
+          <div class="stat-label">Jurisdictions</div>
+          <div class="stat-value" id="jurisdictionCount">5</div>
+          <div class="stat-detail">MY / SG / HK / AU / NZ / IN</div>
+        </section>
+        <section class="stat-card">
+          <div class="stat-label">Tracked Sources</div>
+          <div class="stat-value" id="sourceCount">0</div>
+          <div class="stat-detail" id="officialCount">0 official sources</div>
+        </section>
+        <section class="stat-card">
+          <div class="stat-label">Last Scan</div>
+          <div class="stat-value compact" id="lastScan">No scan yet</div>
+          <div class="stat-detail">Daily scheduler enabled</div>
+        </section>
+      </section>
+
+      <section class="workspace" id="legalUpdatesPage">
+        <div class="main-column">
+          <section class="controls-band">
+            <div class="search-wrap">
+              <label for="search">Search legal updates</label>
+              <input id="search" placeholder="court, judgment, law reform..." />
+            </div>
+            <div class="filter-group" id="countryFilters" aria-label="Jurisdiction"></div>
+            <div class="filter-group" id="categoryFilters" aria-label="Category"></div>
+          </section>
+
+          <section class="updates-list" aria-live="polite">
+            <div class="section-heading">
+              <h2>Latest Updates</h2>
+              <div class="heading-actions">
+                <span id="shownCount">Loading</span>
+              </div>
+            </div>
+            <div id="updates"></div>
+          </section>
+        </div>
+
+        <aside class="side-column">
+          <section class="panel">
+            <div class="section-heading">
+              <h2>Source Watch</h2>
+              <span id="sourceWatchCount">0</span>
+            </div>
+            <ul class="source-list" id="sourceWatch"></ul>
+          </section>
+
+          <section class="panel country-panel">
+            <div class="section-heading">
+              <h2>Jurisdiction Mix</h2>
+            </div>
+            <div id="countryMix"></div>
+          </section>
+        </aside>
+      </section>
+
+      <section class="workspace hidden" id="legalAiPage">
+        <div class="main-column">
+          <section class="controls-band">
+            <div class="search-wrap">
+              <label for="aiSearch">Search Legal AI News</label>
+              <input id="aiSearch" placeholder="AI Act, hallucination, legal tech..." />
+            </div>
+            <div class="filter-caption">Region</div>
+            <div class="filter-group" id="aiRegionFilters" aria-label="Legal AI region"></div>
+            <div class="filter-caption">Source Type</div>
+            <div class="filter-group" id="aiSourceTypeFilters" aria-label="Legal AI source type"></div>
+            <div class="filter-caption">Topic</div>
+            <div class="filter-group" id="aiTopicFilters" aria-label="Legal AI topic"></div>
+          </section>
+
+          <section class="updates-list" aria-live="polite">
+            <div class="section-heading">
+              <h2>Legal AI News</h2>
+              <span id="aiShownCount">Loading</span>
+            </div>
+            <div id="legalAiUpdates"></div>
+          </section>
+        </div>
+
+        <aside class="side-column">
+          <section class="panel">
+            <div class="section-heading">
+              <h2>Legal AI Sources</h2>
+              <span id="legalAiSourceCount">0</span>
+            </div>
+            <ul class="source-list" id="legalAiSources"></ul>
+          </section>
+        </aside>
+      </section>
+
+      <section class="workspace hidden" id="riskHeatmapPage">
+        <div class="main-column">
+          <section class="controls-band risk-controls">
+            <div class="risk-filter-row">
+              <span class="filter-caption first-caption">Jurisdiction</span>
+              <div class="filter-group compact-filters" id="riskJurisdictionFilters" aria-label="Risk heatmap jurisdiction"></div>
+            </div>
+            <div class="risk-filter-row">
+              <span class="filter-caption first-caption">Risk Domain</span>
+              <div class="filter-group compact-filters" id="riskDomainFilters" aria-label="Risk heatmap domain"></div>
+            </div>
+            <div class="risk-filter-row">
+              <span class="filter-caption first-caption">Heat Level</span>
+              <div class="filter-group compact-filters" id="riskLevelFilters" aria-label="Risk heatmap heat level"></div>
+            </div>
+            <div class="risk-filter-row">
+              <span class="filter-caption first-caption">Date Range</span>
+              <div class="filter-group compact-filters" id="riskDateRangeFilters" aria-label="Risk heatmap date range"></div>
+            </div>
+          </section>
+
+          <section class="stats-grid risk-kpis" id="riskKpis">
+            <section class="stat-card">
+              <div class="stat-label">Highest Weighted Risk</div>
+              <div class="stat-value compact" id="riskHighestJurisdiction">Loading</div>
+              <div class="stat-detail" id="riskHighestJurisdictionDetail">Calculating</div>
+            </section>
+            <section class="stat-card">
+              <div class="stat-label">Fastest Rising Risk</div>
+              <div class="stat-value compact" id="riskFastestRising">Loading</div>
+              <div class="stat-detail" id="riskFastestRisingDetail">Calculating</div>
+            </section>
+            <section class="stat-card">
+              <div class="stat-label">Hottest Risk Domain</div>
+              <div class="stat-value compact" id="riskHottestDomain">Loading</div>
+              <div class="stat-detail" id="riskHottestDomainDetail">Calculating</div>
+            </section>
+            <section class="stat-card">
+              <div class="stat-label">Displayed / Ingested Signals</div>
+              <div class="stat-value compact" id="riskSignalsWeek">0</div>
+              <div class="stat-detail" id="riskSignalsWeekDetail">Mapped from existing updates</div>
+            </section>
+          </section>
+
+          <section class="panel heatmap-panel">
+            <div class="section-heading">
+              <h2>APAC Legal Risk Heatmap</h2>
+              <span id="riskHeatmapCount">Loading</span>
+            </div>
+            <div class="heatmap-scroll">
+              <table class="risk-heatmap" id="riskHeatmapGrid"></table>
+            </div>
+          </section>
+        </div>
+
+        <aside class="side-column">
+          <section class="panel risk-detail-panel">
+            <div class="section-heading">
+              <h2>Cell Details</h2>
+              <span id="riskDetailScore">Select a cell</span>
+            </div>
+            <div id="riskCellDetail" class="risk-cell-detail empty-state">Select a heatmap cell to see the real legal updates behind the score.</div>
+          </section>
+        </aside>
+      </section>
+
+      <section class="workspace hidden routing-workspace" id="routingEnginePage">
+        <div class="main-column">
+          <section class="controls-band routing-tabs" aria-label="Routing engine pages">
+            <button class="filter-chip active" type="button" data-routing-tab="dashboard">Strategic Intelligence Dashboard</button>
+            <button class="filter-chip" type="button" data-routing-tab="items">Source Intake Queue</button>
+            <button class="filter-chip" type="button" data-routing-tab="profiles">Department Profiles</button>
+            <button class="filter-chip" type="button" data-routing-tab="digest">Digest Builder</button>
+            <button class="filter-chip" type="button" data-routing-tab="email">Email Preview</button>
+            <button class="filter-chip" type="button" data-routing-tab="history">Digest History</button>
+            <button class="filter-chip" type="button" data-routing-tab="analytics">Feedback Analytics</button>
+          </section>
+
+          <section class="routing-page-surface" id="routingMain"></section>
+        </div>
+
+        <aside class="side-column">
+          <section class="panel routing-side-panel">
+            <div class="section-heading">
+              <h2>Same Signal, Different Implication</h2>
+              <span id="routingSelectedScore">Live routing</span>
+            </div>
+            <div id="routingComparison"></div>
+          </section>
+        </aside>
+      </section>
+
+      <section class="workspace hidden judge-workspace" id="judgeToolPage">
+        <div class="main-column">
+          <section class="stats-grid judge-kpis">
+            <section class="stat-card">
+              <div class="stat-label">Detected Judicial Updates</div>
+              <div class="stat-value compact" id="judgeDetectedCount">0</div>
+              <div class="stat-detail">From existing legal/news feed data</div>
+            </section>
+            <section class="stat-card">
+              <div class="stat-label">Needs Review</div>
+              <div class="stat-value compact" id="judgeNeedsReviewCount">0</div>
+              <div class="stat-detail">Missing or low-confidence details</div>
+            </section>
+            <section class="stat-card">
+              <div class="stat-label">Drafts Generated</div>
+              <div class="stat-value compact" id="judgeDraftsCount">0</div>
+              <div class="stat-detail">Local workflow only</div>
+            </section>
+            <section class="stat-card">
+              <div class="stat-label">Approved Drafts</div>
+              <div class="stat-value compact" id="judgeApprovedCount">0</div>
+              <div class="stat-detail">Ready to copy/export</div>
+            </section>
+          </section>
+
+          <section class="controls-band judge-controls">
+            <div class="risk-filter-row">
+              <span class="filter-caption first-caption">Jurisdiction</span>
+              <div class="filter-group compact-filters" id="judgeJurisdictionFilters" aria-label="Judge tool jurisdiction"></div>
+            </div>
+            <div class="risk-filter-row">
+              <span class="filter-caption first-caption">Movement Type</span>
+              <div class="filter-group compact-filters" id="judgeMovementFilters" aria-label="Judge tool movement type"></div>
+            </div>
+            <div class="risk-filter-row">
+              <span class="filter-caption first-caption">Confidence</span>
+              <div class="filter-group compact-filters" id="judgeConfidenceFilters" aria-label="Judge tool confidence"></div>
+            </div>
+            <div class="risk-filter-row">
+              <span class="filter-caption first-caption">Status</span>
+              <div class="filter-group compact-filters" id="judgeStatusFilters" aria-label="Judge tool status"></div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="section-heading">
+              <h2>Judicial Movement Detection Feed</h2>
+              <span id="judgeShownCount">Loading</span>
+            </div>
+            <div id="judgeMovementList" class="routing-table"></div>
+          </section>
+        </div>
+
+        <aside class="side-column">
+          <section class="panel judge-detail-panel">
+            <div class="section-heading">
+              <h2>Draft Review</h2>
+              <span id="judgeDetailStatus">Select an item</span>
+            </div>
+            <div id="judgeDetail" class="empty-state">Select a detected judicial movement item to review source details and generate a draft.</div>
+          </section>
+        </aside>
+      </section>
+    </main>
+    <script src="./src/emailDraft.js?v=20260521c"></script>
+    <script src="./src/judgeCongratulationTool.js?v=judge-tool-20260527a"></script>
+    <script src="./src/routingData.js?v=pd-digest-ai-summary-20260528"></script>
+    <script src="./src/routingEngine.js?v=pd-digest-ai-summary-20260528"></script>
+    <script src="./config.js?v=deploy-config-20260604"></script>
+    <script src="./app.js?v=pd-digest-ai-summary-20260528"></script>
+  </body>
+</html>
