@@ -1,11 +1,20 @@
 const APP_CONFIG = window.APAC_LEGAL_UPDATES_CONFIG || {};
+const IS_LOCAL_HOST = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+const IS_GITHUB_PAGES = window.location.hostname.endsWith('github.io');
 const API_BASE =
-  localStorage.getItem('apacLegalUpdatesApiBase') ||
-  localStorage.getItem('legalUpdatesApiBase') ||
-  APP_CONFIG.apiBaseUrl ||
-  (window.location.protocol === 'https:' || window.location.port === '5175' ? window.location.origin : null) ||
-  'http://127.0.0.1:8000';
-const PUBLIC_MODE = Boolean(APP_CONFIG.publicMode) || window.location.hostname.endsWith('github.io');
+  (IS_LOCAL_HOST
+    ? (APP_CONFIG.localApiBaseUrl || 'http://127.0.0.1:8005')
+    : IS_GITHUB_PAGES
+      ? APP_CONFIG.apiBaseUrl
+    : (
+      localStorage.getItem('apacLegalUpdatesApiBase') ||
+      localStorage.getItem('legalUpdatesApiBase') ||
+      APP_CONFIG.apiBaseUrl ||
+      (window.location.protocol === 'https:' || window.location.port === '5175' ? window.location.origin : null) ||
+      'http://127.0.0.1:8005'
+    ));
+const PUBLISH_API_BASE = APP_CONFIG.publishApiBaseUrl || API_BASE;
+const PUBLIC_MODE = Boolean(APP_CONFIG.publicMode);
 const DEFAULT_COUNTRIES = ['Malaysia', 'Singapore', 'Hong Kong', 'Australia', 'New Zealand', 'India'];
 const CATEGORY_ORDER = [
   'Press Release/Judiciary Updates',
@@ -41,6 +50,11 @@ const ROUTING_ENGINE_PAGE = {
   eyebrow: 'Core APAC Legal Intelligence',
   title: 'Legal News Routing Engine',
   description: 'Route curated intelligence from Singapore, Hong Kong, India, Australia and Malaysia to PAL, Legislation, SLT and Editorial teams.',
+};
+const WEEKLY_DIGEST_PAGE = {
+  eyebrow: 'Published APAC legal intelligence',
+  title: 'Weekly Digest',
+  description: 'Published weekly legal intelligence digests generated from the local APAC Legal Updates workflow.',
 };
 const JUDGE_TOOL_PAGE = {
   eyebrow: 'Human-reviewed judicial outreach workflow',
@@ -167,6 +181,8 @@ let stats = null;
 let sources = [];
 let updates = [];
 let newsletters = [];
+let weeklyDigests = [];
+let selectedWeeklyDigestId = null;
 let legalAiSources = [];
 let legalAiUpdates = [];
 let allLegalAiUpdates = [];
@@ -185,6 +201,10 @@ const els = {
   legalAiPage: document.querySelector('#legalAiPage'),
   riskHeatmapPage: document.querySelector('#riskHeatmapPage'),
   routingEnginePage: document.querySelector('#routingEnginePage'),
+  weeklyDigestPage: document.querySelector('#weeklyDigestPage'),
+  weeklyDigestList: document.querySelector('#weeklyDigestList'),
+  weeklyDigestDetail: document.querySelector('#weeklyDigestDetail'),
+  weeklyDigestCount: document.querySelector('#weeklyDigestCount'),
   judgeToolPage: document.querySelector('#judgeToolPage'),
   themeToggle: document.querySelector('#themeToggle'),
   themeToggleText: document.querySelector('#themeToggleText'),
@@ -290,7 +310,11 @@ function el(tag, className, text) {
 }
 
 async function api(path, options) {
-  const response = await fetch(`${API_BASE}${path}`, options);
+  return apiAt(API_BASE, path, options);
+}
+
+async function apiAt(baseUrl, path, options) {
+  const response = await fetch(`${baseUrl}${path}`, options);
   if (!response.ok) {
     let message = `${path} returned ${response.status}`;
     try {
@@ -302,6 +326,19 @@ async function api(path, options) {
     throw new Error(message);
   }
   return response.json();
+}
+
+async function fetchAllPages(pathOrBuilder, { limit = 200, maxItems = 1200 } = {}) {
+  const rows = [];
+  for (let offset = 0; offset < maxItems; offset += limit) {
+    const path = typeof pathOrBuilder === 'function'
+      ? pathOrBuilder({ limit, offset })
+      : `${pathOrBuilder}${pathOrBuilder.includes('?') ? '&' : '?'}limit=${limit}&offset=${offset}`;
+    const page = await api(path);
+    rows.push(...page);
+    if (page.length < limit) break;
+  }
+  return rows;
 }
 
 function titleCase(value) {
@@ -332,13 +369,16 @@ function pageCopy(page) {
   if (page === 'legal-ai-news') return LEGAL_AI_PAGE;
   if (page === 'apac-risk-heatmap') return RISK_HEATMAP_PAGE;
   if (page === 'routing-engine') return ROUTING_ENGINE_PAGE;
+  if (page === 'weekly-digest') return WEEKLY_DIGEST_PAGE;
   if (page === 'judge-congratulation-tool') return JUDGE_TOOL_PAGE;
   return LEGAL_UPDATES_PAGE;
 }
 
 function normalizePage(page) {
   if (PUBLIC_MODE) return 'legal-updates';
-  if (page === 'legal-ai-news' || page === 'apac-risk-heatmap' || page === 'routing-engine' || page === 'judge-congratulation-tool') return page;
+  if (page === 'routing-engine' && IS_LOCAL_HOST) return page;
+  if (page === 'weekly-digest' && IS_GITHUB_PAGES) return page;
+  if (page === 'legal-ai-news' || page === 'apac-risk-heatmap' || page === 'judge-congratulation-tool') return page;
   return 'legal-updates';
 }
 
@@ -421,9 +461,15 @@ function setPage(page) {
   els.legalAiPage.classList.toggle('hidden', activePage !== 'legal-ai-news');
   els.riskHeatmapPage.classList.toggle('hidden', activePage !== 'apac-risk-heatmap');
   els.routingEnginePage.classList.toggle('hidden', activePage !== 'routing-engine');
+  els.weeklyDigestPage.classList.toggle('hidden', activePage !== 'weekly-digest');
   els.judgeToolPage.classList.toggle('hidden', activePage !== 'judge-congratulation-tool');
   els.pageLinks.forEach((link) => {
-    link.classList.toggle('hidden', PUBLIC_MODE && link.dataset.pageLink !== 'legal-updates');
+    link.classList.toggle(
+      'hidden',
+      (PUBLIC_MODE && link.dataset.pageLink !== 'legal-updates')
+        || (link.dataset.pageLink === 'routing-engine' && !IS_LOCAL_HOST)
+        || (link.dataset.pageLink === 'weekly-digest' && !IS_GITHUB_PAGES),
+    );
     const active = link.dataset.pageLink === activePage;
     link.classList.toggle('active', active);
     link.setAttribute('aria-current', active ? 'page' : 'false');
@@ -437,6 +483,8 @@ function setPage(page) {
     loadRiskHeatmap().catch((error) => setAlert(error instanceof Error ? error.message : 'Unable to load APAC Legal Risk Heatmap'));
   } else if (activePage === 'routing-engine') {
     loadRoutingIntelligence().catch((error) => setAlert(error instanceof Error ? error.message : 'Unable to load routing intelligence'));
+  } else if (activePage === 'weekly-digest') {
+    loadWeeklyDigests().catch((error) => setAlert(error instanceof Error ? error.message : 'Unable to load Weekly Digest'));
   } else if (activePage === 'judge-congratulation-tool') {
     loadJudgeTool().catch((error) => setAlert(error instanceof Error ? error.message : 'Unable to load Email Drafting Tool'));
   } else {
@@ -1981,6 +2029,49 @@ function sendCurrentDigest() {
   renderRoutingEngine();
 }
 
+function weeklyDigestPublishPayload(digest) {
+  return {
+    digest_id: digest.id,
+    title: digest.subject,
+    summary: digest.executiveSummary,
+    html_body: digest.htmlBody,
+    text_body: digest.textBody,
+    status: 'published',
+    item_count: digest.itemIds?.length || digest.entries?.length || 0,
+    department: digest.department,
+    digest_type: digest.digestType,
+    entries: (digest.entries || []).map((entry) => ({
+      title: entry.item.title,
+      summary: entry.item.summary,
+      link: entry.item.link,
+      source: entry.item.source,
+      jurisdiction: entry.item.jurisdiction,
+      topic: entry.item.topic,
+      urgency: entry.item.urgency,
+      why_this_matters: entry.route.whyThisMatters,
+      recommended_action: entry.route.recommendedAction,
+      confidence: entry.route.confidence,
+    })),
+  };
+}
+
+async function publishCurrentDigest() {
+  if (!currentRoutingDigest) currentRoutingDigest = createDigest('Ready');
+  const published = await apiAt(PUBLISH_API_BASE, '/api/admin/weekly-digests/publish', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(weeklyDigestPublishPayload(currentRoutingDigest)),
+  });
+  currentRoutingDigest = {
+    ...currentRoutingDigest,
+    status: 'Published',
+    publishedAt: published.published_at,
+  };
+  upsertDigestHistory(currentRoutingDigest);
+  setAlert('Weekly digest published to the public Weekly Digest tab.');
+  renderRoutingEngine();
+}
+
 function digestStatusStep() {
   if (currentRoutingDigest?.status === 'Sent' || currentRoutingDigest?.status === 'Simulated Sent') return 'Sent';
   if (currentRoutingDigest?.status === 'Draft') return 'Draft Saved';
@@ -2294,6 +2385,7 @@ function renderDigestBuilder() {
         <button class="ghost-button" id="summarizeDigestSources" type="button" ${digestSummaryLoading ? 'disabled' : ''}>${digestSummaryLoading ? 'Summarizing...' : 'Generate AI summaries'}</button>
         <button class="ghost-button" id="saveDigestDraft" type="button">Save draft</button>
         <button class="ghost-button" id="sendDigest" type="button">Send</button>
+        <button class="ghost-button" id="publishDigest" type="button">Publish to Weekly Digest</button>
         <button class="ghost-button" id="viewDigestHistory" type="button">View history</button>
         <span class="simulated-note">No real email is sent from this local preview.</span>
       </div>
@@ -2368,6 +2460,9 @@ function renderDigestBuilder() {
     sendCurrentDigest();
     activeRoutingTab = 'history';
     renderRoutingEngine();
+  });
+  document.querySelector('#publishDigest').addEventListener('click', () => {
+    publishCurrentDigest().catch((error) => setAlert(error instanceof Error ? error.message : 'Unable to publish Weekly Digest'));
   });
   document.querySelector('#viewDigestHistory').addEventListener('click', () => {
     activeRoutingTab = 'history';
@@ -2473,6 +2568,7 @@ function renderEmailPreview() {
           <button class="ghost-button compact-button" type="button" id="copyDigestHtml">Copy HTML</button>
           <button class="ghost-button compact-button" type="button" id="viewDigestPlainText">View plain text</button>
           <button class="ghost-button compact-button" type="button" id="summarizePreviewSources" ${digestSummaryLoading ? 'disabled' : ''}>${digestSummaryLoading ? 'Summarizing...' : 'Generate AI summaries'}</button>
+          <button class="ghost-button compact-button" type="button" id="publishPreviewDigest">Publish to Weekly Digest</button>
           <button class="primary-button compact-button" type="button" id="sendPreviewDigest">Send</button>
         </div>
       </div>
@@ -2500,6 +2596,9 @@ function renderEmailPreview() {
     renderRoutingEngine();
   });
   document.querySelector('#summarizePreviewSources').addEventListener('click', summarizeSelectedDigestSources);
+  document.querySelector('#publishPreviewDigest').addEventListener('click', () => {
+    publishCurrentDigest().catch((error) => setAlert(error instanceof Error ? error.message : 'Unable to publish Weekly Digest'));
+  });
   document.querySelector('#sendPreviewDigest').addEventListener('click', sendCurrentDigest);
   document.querySelector('#copyDigestText')?.addEventListener('click', () => copyToClipboard(digest.textBody, 'Plain text email'));
   document.querySelectorAll('[data-close-plain-text]').forEach((node) => {
@@ -2553,6 +2652,68 @@ function renderDigestHistory() {
 
 function digestStatusClass(value) {
   return `digest-status-${String(value || 'Draft').toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+}
+
+function renderWeeklyDigestCard(digest) {
+  const selected = digest.digest_id === selectedWeeklyDigestId;
+  return `
+    <article class="update-card ${selected ? 'selected' : ''}">
+      <button class="routing-item-main" type="button" data-weekly-digest="${escapeHtml(digest.digest_id)}">
+        <div class="update-meta">
+          <span class="category">Weekly Digest</span>
+          <span>${escapeHtml(formatDate(digest.published_at || digest.created_at))}</span>
+        </div>
+        <h3>${escapeHtml(digest.title)}</h3>
+        <p>${escapeHtml(digest.summary || digest.text_body || '')}</p>
+        <div class="update-footer">
+          <strong>${escapeHtml(digest.department || 'APAC Legal Updates')}</strong>
+          <span>${escapeHtml(digest.item_count || 0)} item${Number(digest.item_count || 0) === 1 ? '' : 's'}</span>
+        </div>
+      </button>
+    </article>
+  `;
+}
+
+function renderWeeklyDigestDetail(digest) {
+  if (!digest) {
+    els.weeklyDigestDetail.innerHTML = '<div class="empty-state">Select a published weekly digest to preview it.</div>';
+    return;
+  }
+  els.weeklyDigestDetail.innerHTML = `
+    <div class="weekly-digest-detail">
+      <div class="section-heading">
+        <h2>${escapeHtml(digest.title)}</h2>
+        <span>${escapeHtml(formatDate(digest.published_at || digest.created_at))}</span>
+      </div>
+      <p>${escapeHtml(digest.summary || '')}</p>
+      <div class="email-render-frame">${digest.html_body || `<pre>${escapeHtml(digest.text_body || '')}</pre>`}</div>
+    </div>
+  `;
+}
+
+function renderWeeklyDigests() {
+  els.weeklyDigestCount.textContent = `${weeklyDigests.length} published`;
+  if (!weeklyDigests.length) {
+    els.weeklyDigestList.innerHTML = '<div class="empty-state">No weekly digests have been published yet.</div>';
+    renderWeeklyDigestDetail(null);
+    return;
+  }
+  if (!weeklyDigests.some((digest) => digest.digest_id === selectedWeeklyDigestId)) {
+    selectedWeeklyDigestId = weeklyDigests[0].digest_id;
+  }
+  els.weeklyDigestList.innerHTML = weeklyDigests.map(renderWeeklyDigestCard).join('');
+  renderWeeklyDigestDetail(weeklyDigests.find((digest) => digest.digest_id === selectedWeeklyDigestId));
+  document.querySelectorAll('[data-weekly-digest]').forEach((button) => {
+    button.addEventListener('click', () => {
+      selectedWeeklyDigestId = button.dataset.weeklyDigest;
+      renderWeeklyDigests();
+    });
+  });
+}
+
+async function loadWeeklyDigests() {
+  weeklyDigests = await fetchAllPages('/api/weekly-digests', { limit: 100, maxItems: 300 });
+  renderWeeklyDigests();
 }
 
 function renderEmailItem(entry) {
@@ -2713,8 +2874,8 @@ function dedupeRoutingUpdates(rows) {
 }
 
 async function loadRoutingUpdateRows(pageSize) {
-  const priorityRows = await Promise.all(routingUpdateRequestPaths(pageSize).map((path) => api(path)));
-  const mixedRows = await api(`/api/updates?limit=${pageSize}`);
+  const priorityRows = await Promise.all(routingUpdateRequestPaths(pageSize).map((path) => fetchAllPages(path, { limit: pageSize, maxItems: 1200 })));
+  const mixedRows = await fetchAllPages('/api/updates', { limit: pageSize, maxItems: 1200 });
   return dedupeRoutingUpdates([...priorityRows.flat(), ...mixedRows]);
 }
 
@@ -2782,17 +2943,17 @@ async function loadUpdates() {
     return;
   }
   const selectedCountries = selectedCountryList();
-  const buildPath = (country) => {
-    const params = new URLSearchParams({ limit: '80' });
+  const buildPath = (country) => ({ limit, offset }) => {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (country) params.set('country', country);
     if (activeCategory !== 'All') params.set('category', activeCategory);
     if (els.search.value.trim()) params.set('q', els.search.value.trim());
     return `/api/updates?${params}`;
   };
   if (selectedCountries.length <= 1) {
-    updates = await api(buildPath(selectedCountries[0]));
+    updates = await fetchAllPages(buildPath(selectedCountries[0]), { limit: 200, maxItems: 1200 });
   } else {
-    const rows = await Promise.all(selectedCountries.map((country) => api(buildPath(country))));
+    const rows = await Promise.all(selectedCountries.map((country) => fetchAllPages(buildPath(country), { limit: 200, maxItems: 1200 })));
     const byId = new Map(rows.flat().map((item) => [item.id, item]));
     updates = Array.from(byId.values()).sort((a, b) => {
       const dateDiff = new Date(b.date || b.first_seen_at || 0) - new Date(a.date || a.first_seen_at || 0);
@@ -2828,7 +2989,7 @@ async function loadLegalAi() {
   try {
     [legalAiSources, allLegalAiUpdates] = await Promise.all([
       api('/api/legal-ai/sources'),
-      api('/api/legal-ai/updates?limit=200'),
+      fetchAllPages('/api/legal-ai/updates', { limit: 200, maxItems: 1200 }),
     ]);
     legalAiUpdates = allLegalAiUpdates;
     renderLegalAiSources();
@@ -2840,7 +3001,7 @@ async function loadLegalAi() {
 }
 
 async function loadLegalAiUpdates() {
-  allLegalAiUpdates = await api('/api/legal-ai/updates?limit=200');
+  allLegalAiUpdates = await fetchAllPages('/api/legal-ai/updates', { limit: 200, maxItems: 1200 });
   legalAiUpdates = allLegalAiUpdates;
   renderLegalAiFilters();
   renderLegalAiUpdates();
@@ -2866,6 +3027,9 @@ async function scanNow() {
       await api('/api/refresh', { method: 'POST' });
       await loadRoutingIntelligence({ force: true });
       setAlert('Core APAC routing intelligence refreshed from the Legal Updates database.');
+    } else if (activePage === 'weekly-digest') {
+      await loadWeeklyDigests();
+      setAlert('Weekly Digest refreshed.');
     } else if (activePage === 'judge-congratulation-tool') {
       await api('/api/refresh', { method: 'POST' });
       await loadJudgeTool();
@@ -2893,6 +3057,8 @@ els.reload.addEventListener('click', () => {
     loadRiskHeatmap();
   } else if (activePage === 'routing-engine') {
     loadRoutingIntelligence({ force: true }).catch((error) => setAlert(error instanceof Error ? error.message : 'Unable to load routing intelligence'));
+  } else if (activePage === 'weekly-digest') {
+    loadWeeklyDigests().catch((error) => setAlert(error instanceof Error ? error.message : 'Unable to load Weekly Digest'));
   } else if (activePage === 'judge-congratulation-tool') {
     loadJudgeTool().catch((error) => setAlert(error instanceof Error ? error.message : 'Unable to load Email Drafting Tool'));
   } else {
