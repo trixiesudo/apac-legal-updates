@@ -24,7 +24,8 @@
             <a href="#legal-ai-news" class="page-nav-link" data-page-link="legal-ai-news">Legal AI News</a>
             <a href="#apac-risk-heatmap" class="page-nav-link" data-page-link="apac-risk-heatmap">APAC Legal Risk Heatmap</a>
             <a href="#judge-congratulation-tool" class="page-nav-link" data-page-link="judge-congratulation-tool">Email Drafting Tool</a>
-            <a href="#routing-engine" class="page-nav-link" data-page-link="routing-engine">Legal News Routing Engine</a>
+            <a href="#weekly-digest" class="page-nav-link hidden" data-page-link="weekly-digest">Weekly Digest</a>
+            <a href="#routing-engine" class="page-nav-link hidden" data-page-link="routing-engine">Legal News Routing Engine</a>
           </nav>
         </div>
         <div class="actions">
@@ -231,6 +232,27 @@
         </aside>
       </section>
 
+      <section class="workspace hidden" id="weeklyDigestPage">
+        <div class="main-column">
+          <section class="updates-list" aria-live="polite">
+            <div class="section-heading">
+              <h2>Published Weekly Digests</h2>
+              <span id="weeklyDigestCount">Loading</span>
+            </div>
+            <div id="weeklyDigestList"></div>
+          </section>
+        </div>
+
+        <aside class="side-column">
+          <section class="panel">
+            <div class="section-heading">
+              <h2>Digest Preview</h2>
+            </div>
+            <div id="weeklyDigestDetail" class="empty-state">Select a published weekly digest to preview it.</div>
+          </section>
+        </aside>
+      </section>
+
       <section class="workspace hidden judge-workspace" id="judgeToolPage">
         <div class="main-column">
           <section class="stats-grid judge-kpis">
@@ -299,7 +321,7 @@
     <script src="./src/judgeCongratulationTool.js?v=judge-tool-20260527a"></script>
     <script src="./src/routingData.js?v=pd-digest-ai-summary-20260528"></script>
     <script src="./src/routingEngine.js?v=pd-digest-ai-summary-20260528"></script>
-    <script src="./config.js?v=deploy-config-20260604"></script>
-    <script src="./app.js?v=pd-digest-ai-summary-20260528"></script>
+    <script src="./config.js?v=weekly-digest-20260605"></script>
+    <script src="./app.js?v=weekly-digest-20260605"></script>
   </body>
 </html>
