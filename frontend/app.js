@@ -328,6 +328,11 @@ async function apiAt(baseUrl, path, options) {
   return response.json();
 }
 
+function isMissingApiRoute(error) {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return message === 'Not Found' || /returned 404\b/.test(message);
+}
+
 async function fetchAllPages(pathOrBuilder, { limit = 200, maxItems = 1200 } = {}) {
   const rows = [];
   for (let offset = 0; offset < maxItems; offset += limit) {
@@ -2055,20 +2060,46 @@ function weeklyDigestPublishPayload(digest) {
   };
 }
 
+function newsletterPublishPayloadForDigest(digest) {
+  return {
+    title: digest.subject,
+    summary: digest.executiveSummary,
+    html_body: digest.htmlBody,
+    text_body: digest.textBody,
+    status: 'published',
+  };
+}
+
 async function publishCurrentDigest() {
   if (!currentRoutingDigest) currentRoutingDigest = createDigest('Ready');
-  const published = await apiAt(PUBLISH_API_BASE, '/api/admin/weekly-digests/publish', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(weeklyDigestPublishPayload(currentRoutingDigest)),
-  });
+  let publishedVia = 'weekly-digests';
+  let published;
+  try {
+    published = await apiAt(PUBLISH_API_BASE, '/api/admin/weekly-digests/publish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(weeklyDigestPublishPayload(currentRoutingDigest)),
+    });
+  } catch (error) {
+    if (!isMissingApiRoute(error)) throw error;
+    publishedVia = 'newsletters';
+    published = await apiAt(PUBLISH_API_BASE, '/api/admin/newsletters/publish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newsletterPublishPayloadForDigest(currentRoutingDigest)),
+    });
+  }
   currentRoutingDigest = {
     ...currentRoutingDigest,
     status: 'Published',
     publishedAt: published.published_at,
   };
   upsertDigestHistory(currentRoutingDigest);
-  setAlert('Weekly digest published to the public Weekly Digest tab.');
+  setAlert(
+    publishedVia === 'weekly-digests'
+      ? 'Weekly digest published to the public Weekly Digest tab.'
+      : 'Weekly digest published through the deployed newsletter feed for the public Weekly Digest tab.',
+  );
   renderRoutingEngine();
 }
 
@@ -2711,8 +2742,33 @@ function renderWeeklyDigests() {
   });
 }
 
+function newsletterToWeeklyDigest(newsletter) {
+  return {
+    id: newsletter.id,
+    digest_id: `newsletter-${newsletter.id}`,
+    title: newsletter.title,
+    summary: newsletter.summary || '',
+    html_body: newsletter.html_body || '',
+    text_body: newsletter.text_body || '',
+    status: newsletter.status || 'published',
+    published_at: newsletter.published_at,
+    created_at: newsletter.created_at,
+    updated_at: newsletter.updated_at,
+    item_count: 0,
+    department: 'APAC Legal Updates',
+    digest_type: 'Weekly Digest',
+    entries: [],
+  };
+}
+
 async function loadWeeklyDigests() {
-  weeklyDigests = await fetchAllPages('/api/weekly-digests', { limit: 100, maxItems: 300 });
+  try {
+    weeklyDigests = await fetchAllPages('/api/weekly-digests', { limit: 100, maxItems: 300 });
+  } catch (error) {
+    if (!isMissingApiRoute(error)) throw error;
+    const fallbackNewsletters = await fetchAllPages('/api/newsletters', { limit: 100, maxItems: 300 });
+    weeklyDigests = fallbackNewsletters.map(newsletterToWeeklyDigest);
+  }
   renderWeeklyDigests();
 }
 
