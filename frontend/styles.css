@@ -329,6 +329,11 @@ h2 {
   min-width: 0;
 }
 
+#weeklyDigestPage,
+.published-admin-workspace {
+  grid-template-columns: minmax(320px, 440px) minmax(0, 1fr);
+}
+
 .main-column,
 .side-column {
   display: grid;
@@ -790,6 +795,10 @@ h2 {
 
 .status-dot.error {
   background: var(--accent);
+}
+
+.status-dot.stale {
+  background: var(--amber);
 }
 
 .status-dot.idle {
@@ -1600,6 +1609,45 @@ h2 {
   max-height: 760px;
   overflow: auto;
   background: #0d141a;
+}
+
+.weekly-digest-detail,
+.published-admin-detail {
+  display: grid;
+  gap: 14px;
+}
+
+.weekly-digest-detail > p,
+.published-admin-detail > p {
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.weekly-digest-detail .email-render-frame,
+.published-admin-detail .email-render-frame {
+  min-height: 720px;
+  max-height: calc(100vh - 260px);
+  padding: 28px;
+}
+
+.weekly-digest-detail .email-render-frame > *,
+.published-admin-detail .email-render-frame > * {
+  max-width: 980px;
+}
+
+.published-admin-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.danger-button {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
+  color: var(--accent-strong);
+}
+
+.danger-button:hover {
+  background: var(--accent-soft);
 }
 
 .modal-backdrop {
