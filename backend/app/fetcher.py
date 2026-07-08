@@ -130,15 +130,33 @@ BROWSER_COMPATIBLE_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/125.0 Safari/537.36"
 )
+HTML_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+RSS_ACCEPT = "application/rss+xml,application/xml;q=0.9,text/xml;q=0.8,*/*;q=0.7"
 
 SOURCE_REQUEST_HEADERS = {
+    "in_bar_and_bench": {
+        "User-Agent": BROWSER_COMPATIBLE_USER_AGENT,
+        "Accept": RSS_ACCEPT,
+    },
+    "in_lawmin_press": {
+        "User-Agent": BROWSER_COMPATIBLE_USER_AGENT,
+        "Accept": HTML_ACCEPT,
+    },
+    "in_scc_online_blog": {
+        "User-Agent": BROWSER_COMPATIBLE_USER_AGENT,
+        "Accept": RSS_ACCEPT,
+    },
     "my_fmt_nation": {
         "User-Agent": BROWSER_COMPATIBLE_USER_AGENT,
-        "Accept": "application/rss+xml,application/xml;q=0.9,text/xml;q=0.8,*/*;q=0.7",
+        "Accept": RSS_ACCEPT,
+    },
+    "sg_minlaw_news": {
+        "User-Agent": BROWSER_COMPATIBLE_USER_AGENT,
+        "Accept": HTML_ACCEPT,
     },
     "sg_sso_new_legislation": {
         "User-Agent": BROWSER_COMPATIBLE_USER_AGENT,
-        "Accept": "application/rss+xml,application/xml;q=0.9,text/xml;q=0.8,*/*;q=0.7",
+        "Accept": RSS_ACCEPT,
     },
 }
 
