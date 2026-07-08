@@ -111,6 +111,26 @@ class SourceOverhaulTests(unittest.TestCase):
         self.assertIn("Chrome", headers["User-Agent"])
         self.assertIn("application/rss+xml", headers["Accept"])
 
+    def test_unstable_news_sources_use_current_urls_and_browser_headers(self) -> None:
+        sources = {source.id: source for source in config.SOURCES}
+
+        self.assertEqual(sources["sg_minlaw_news"].url, "https://www.mlaw.gov.sg/news/")
+        self.assertEqual(sources["in_lawmin_press"].url, "https://www.lawmin.gov.in/press-release")
+        self.assertEqual(sources["in_bar_and_bench"].url, "https://www.barandbench.com/stories.rss")
+        self.assertEqual(sources["in_bar_and_bench"].source_type, "rss")
+        self.assertEqual(sources["in_scc_online_blog"].url, "https://www.scconline.com/blog/feed/")
+        self.assertEqual(sources["in_scc_online_blog"].source_type, "rss")
+
+        for source_id in ("sg_minlaw_news", "in_lawmin_press", "in_bar_and_bench", "in_scc_online_blog"):
+            headers = fetcher.request_headers_for_source(sources[source_id])
+            self.assertIsNotNone(headers)
+            self.assertIn("Chrome", headers["User-Agent"])
+
+        self.assertIn("text/html", fetcher.request_headers_for_source(sources["sg_minlaw_news"])["Accept"])
+        self.assertIn("text/html", fetcher.request_headers_for_source(sources["in_lawmin_press"])["Accept"])
+        self.assertIn("application/rss+xml", fetcher.request_headers_for_source(sources["in_bar_and_bench"])["Accept"])
+        self.assertIn("application/rss+xml", fetcher.request_headers_for_source(sources["in_scc_online_blog"])["Accept"])
+
     def test_existing_political_legislative_assembly_story_is_hidden(self) -> None:
         original_settings = database.settings
         with tempfile.TemporaryDirectory() as tmp:
