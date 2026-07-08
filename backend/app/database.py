@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 import re
 from contextlib import contextmanager
@@ -257,6 +258,27 @@ def newsletters_table_sql() -> str:
             """
 
 
+def weekly_digests_table_sql() -> str:
+    return """
+            CREATE TABLE IF NOT EXISTS weekly_digests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                digest_id TEXT NOT NULL UNIQUE,
+                title TEXT NOT NULL,
+                summary TEXT NOT NULL DEFAULT '',
+                html_body TEXT NOT NULL DEFAULT '',
+                text_body TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'draft',
+                published_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                item_count INTEGER NOT NULL DEFAULT 0,
+                department TEXT NOT NULL DEFAULT '',
+                digest_type TEXT NOT NULL DEFAULT '',
+                entries_json TEXT NOT NULL DEFAULT '[]'
+            )
+            """
+
+
 @contextmanager
 def connect() -> Any:
     settings.database_path.parent.mkdir(parents=True, exist_ok=True)
@@ -276,6 +298,7 @@ def init_db() -> None:
         ensure_updates_schema(conn)
         conn.execute(legal_ai_updates_table_sql())
         conn.execute(newsletters_table_sql())
+        conn.execute(weekly_digests_table_sql())
         conn.execute("CREATE INDEX IF NOT EXISTS idx_updates_country ON updates(country)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_updates_category ON updates(category)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_updates_date ON updates(date)")
@@ -287,6 +310,8 @@ def init_db() -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_legal_ai_source ON legal_ai_updates(source_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_newsletters_status ON newsletters(status)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_newsletters_published ON newsletters(published_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_weekly_digests_status ON weekly_digests(status)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_weekly_digests_published ON weekly_digests(published_at)")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS source_runs (
@@ -513,6 +538,103 @@ def list_published_newsletters(limit: int = 50, offset: int = 0) -> list[dict[st
     return [dict(row) for row in rows]
 
 
+def delete_newsletter(newsletter_id: int) -> bool:
+    with connect() as conn:
+        cursor = conn.execute("DELETE FROM newsletters WHERE id = ?", (newsletter_id,))
+        return cursor.rowcount > 0
+
+
+def weekly_digest_row(row: sqlite3.Row) -> dict[str, Any]:
+    data = dict(row)
+    try:
+        data["entries"] = json.loads(data.pop("entries_json") or "[]")
+    except json.JSONDecodeError:
+        data["entries"] = []
+    return data
+
+
+def upsert_weekly_digest(item: dict[str, Any]) -> dict[str, Any]:
+    now = utc_now_iso()
+    status = item.get("status") or "published"
+    published_at = item.get("published_at") or (now if status == "published" else None)
+    digest_id = item.get("digest_id") or f"weekly-digest-{int(datetime.now(timezone.utc).timestamp())}"
+    entries_json = item.get("entries_json")
+    if entries_json is None:
+        entries_json = json.dumps(item.get("entries") or [], ensure_ascii=False)
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO weekly_digests (
+                digest_id, title, summary, html_body, text_body, status,
+                published_at, created_at, updated_at, item_count, department,
+                digest_type, entries_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(digest_id) DO UPDATE SET
+                title = excluded.title,
+                summary = excluded.summary,
+                html_body = excluded.html_body,
+                text_body = excluded.text_body,
+                status = excluded.status,
+                published_at = excluded.published_at,
+                updated_at = excluded.updated_at,
+                item_count = excluded.item_count,
+                department = excluded.department,
+                digest_type = excluded.digest_type,
+                entries_json = excluded.entries_json
+            """,
+            (
+                digest_id,
+                item["title"],
+                item.get("summary", ""),
+                item.get("html_body", ""),
+                item.get("text_body", ""),
+                status,
+                published_at,
+                now,
+                now,
+                int(item.get("item_count") or len(item.get("entries") or [])),
+                item.get("department", ""),
+                item.get("digest_type", ""),
+                entries_json,
+            ),
+        )
+        row = conn.execute(
+            """
+            SELECT id, digest_id, title, summary, html_body, text_body, status,
+                   published_at, created_at, updated_at, item_count, department,
+                   digest_type, entries_json
+            FROM weekly_digests
+            WHERE digest_id = ?
+            """,
+            (digest_id,),
+        ).fetchone()
+    return weekly_digest_row(row)
+
+
+def list_published_weekly_digests(limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, digest_id, title, summary, html_body, text_body, status,
+                   published_at, created_at, updated_at, item_count, department,
+                   digest_type, entries_json
+            FROM weekly_digests
+            WHERE status = 'published' AND published_at IS NOT NULL
+            ORDER BY published_at DESC, updated_at DESC
+            LIMIT ? OFFSET ?
+            """,
+            (max(1, min(limit, 100)), max(0, offset)),
+        ).fetchall()
+    return [weekly_digest_row(row) for row in rows]
+
+
+def delete_weekly_digest(digest_id: str) -> bool:
+    with connect() as conn:
+        cursor = conn.execute("DELETE FROM weekly_digests WHERE digest_id = ?", (digest_id,))
+        return cursor.rowcount > 0
+
+
 def upsert_legal_ai_updates(items: list[dict[str, Any]]) -> tuple[int, int]:
     now = utc_now_iso()
     inserted = 0
@@ -596,6 +718,19 @@ def record_source_run(
         "item_count": item_count,
         "error": error_text,
     }
+
+
+def count_updates_for_source(source: str) -> int:
+    clauses, params = visible_update_clauses()
+    clauses.append("source = ?")
+    params.append(source)
+    where = f"WHERE {' AND '.join(clauses)}"
+    with connect() as conn:
+        row = conn.execute(
+            f"SELECT COUNT(*) AS c FROM updates {where}",
+            params,
+        ).fetchone()
+    return int(row["c"] if row else 0)
 
 
 def list_legal_ai_updates(

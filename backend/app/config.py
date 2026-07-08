@@ -39,15 +39,18 @@ class Settings:
     local_ai_base_url: str = os.getenv("LOCAL_AI_BASE_URL", "http://127.0.0.1:11434")
     local_ai_model: str = os.getenv("LOCAL_AI_MODEL", "llama3.2:1b")
     public_mode: bool = env_bool("LEGAL_UPDATES_PUBLIC_MODE", False)
-    github_pages_origin: str = os.getenv("GITHUB_PAGES_ORIGIN", "https://YOUR-GITHUB-USERNAME.github.io")
+    github_pages_origin: str = os.getenv("GITHUB_PAGES_ORIGIN", "https://trixiesudo.github.io")
     cors_origins: tuple[str, ...] = env_list(
         "LEGAL_UPDATES_CORS_ORIGINS",
         (
             "http://localhost:5174",
             "http://127.0.0.1:5174",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
             "http://localhost:8000",
             "http://127.0.0.1:8000",
-            "https://YOUR-GITHUB-USERNAME.github.io",
+            "http://127.0.0.1:8005",
+            "https://trixiesudo.github.io",
         ),
     )
     user_agent: str = os.getenv(
@@ -293,7 +296,7 @@ LEGACY_SOURCES: list[Source] = [
         id="my_fmt_nation",
         country="Malaysia",
         name="Free Malaysia Today - Nation",
-        url="https://www.freemalaysiatoday.com/category/nation/feed/",
+        url="https://cms.freemalaysiatoday.com/category/nation/feed",
         source_type="rss",
     ),
     Source(
@@ -690,7 +693,7 @@ SOURCES: list[Source] = [
         id="my_fmt_nation",
         country="Malaysia",
         name="Free Malaysia Today - Nation",
-        url="https://www.freemalaysiatoday.com/category/nation/feed/",
+        url="https://cms.freemalaysiatoday.com/category/nation/feed",
         source_type="rss",
         category="Legal News",
         source_tab="News Sources",

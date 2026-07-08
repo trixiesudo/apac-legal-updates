@@ -23,7 +23,7 @@ from .config import (
     Source,
     settings,
 )
-from .database import record_source_run, upsert_updates
+from .database import count_updates_for_source, record_source_run, upsert_updates
 
 
 MONTHS = {
@@ -132,6 +132,10 @@ BROWSER_COMPATIBLE_USER_AGENT = (
 )
 
 SOURCE_REQUEST_HEADERS = {
+    "my_fmt_nation": {
+        "User-Agent": BROWSER_COMPATIBLE_USER_AGENT,
+        "Accept": "application/rss+xml,application/xml;q=0.9,text/xml;q=0.8,*/*;q=0.7",
+    },
     "sg_sso_new_legislation": {
         "User-Agent": BROWSER_COMPATIBLE_USER_AGENT,
         "Accept": "application/rss+xml,application/xml;q=0.9,text/xml;q=0.8,*/*;q=0.7",
@@ -302,6 +306,13 @@ def make_fingerprint(country: str, title: str, link: str) -> str:
 
 def request_headers_for_source(source: Source) -> dict[str, str] | None:
     return SOURCE_REQUEST_HEADERS.get(source.id)
+
+
+def exception_message(exc: Exception) -> str:
+    message = str(exc).strip()
+    if message:
+        return message
+    return exc.__class__.__name__
 
 
 def is_legal_relevant(text: str) -> bool:
@@ -707,7 +718,19 @@ async def fetch_source(client: httpx.AsyncClient, source: Source) -> tuple[list[
         run = record_source_run(source.id, source.name, source.country, "ok", len(items))
         return items, run
     except Exception as exc:
-        run = record_source_run(source.id, source.name, source.country, "error", 0, str(exc))
+        error = exception_message(exc)
+        previous_count = count_updates_for_source(source.name)
+        if previous_count:
+            run = record_source_run(
+                source.id,
+                source.name,
+                source.country,
+                "stale",
+                previous_count,
+                f"Source temporarily unavailable; showing {previous_count} previously indexed item(s). Last fetch error: {error}",
+            )
+            return [], run
+        run = record_source_run(source.id, source.name, source.country, "error", 0, error)
         return [], run
 
 
